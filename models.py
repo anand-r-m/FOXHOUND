@@ -51,15 +51,22 @@ class AuditObservation(BaseModel):
     anomalies_flagged: List[str] = Field(default_factory=list)
     findings: List[str] = Field(default_factory=list)
 
-    CFO
+    cfo_visible_anomalies: List[str] = Field(default_factory=list)
+
+    messages: List[str] = Field(default_factory=list)
+    done: bool=False
 
 # full internal state of the audit
 class AuditState(BaseModel):
     pass
 
-# reward info for the agent
+# reward info for the agent grader output
 class RewardInfo(BaseModel):
-    pass
+    reward: float
+    total_reward: float
+    precision: float
+
+    penalties: Dict[str, float] = Field(default_factory=dict)
 
 # task difficulty settings
 class TaskConfig(BaseModel):
