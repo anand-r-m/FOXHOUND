@@ -76,6 +76,8 @@ class Document(BaseModel):
     # history (for delta tracking)
     history: List[str] = Field(default_factory=list)
 
+    # for when the document is hidden
+    hidden_until_step: Optional[int] = None
 
 
 
@@ -103,21 +105,29 @@ class AuditObservation(BaseModel):
     #   "loans": "reclassified"
     #   "Q4_revenue_ledger": "missing"
     # }
+
+    # tracking changes in document status
     document_status_delta: List[str] = Field(default_factory=list)
 
+    # tracking categories requested so far
     requested_categories_so_far: List[str] = Field(default_factory=list)
 
+    # tracking documents received so far
     documents_received: Dict[str, DocumentSummary] = Field(default_factory=dict)
 
 
 
     anomalies_flagged: List[str] = Field(default_factory=list)
+
+    # submitted conclusions
     findings: List[str] = Field(default_factory=list)
 
     # will only have current round actions, not the history
     cfo_visible_actions: List[str] = Field(default_factory=list)
 
-    messages: List[str] = Field(default_factory=list)
+    # messages from the environment to the agent
+    env_feedback: List[str] = Field(default_factory=list)
+
     done: bool=False
 
 # full internal state of the audit
@@ -134,7 +144,8 @@ class AuditState(BaseModel):
     # ===== CFO (hidden logic) =====
     cfo_strategy: str
     cfo_budget_remaining: int
-    cfo_actions_taken: List[str]
+    cfo_actions_history: List[str]
+    cfo_actions_current_round: List[str]
 
     # track which docs CFO cares about hiding
     critical_docs: List[str]
@@ -154,6 +165,9 @@ class AuditState(BaseModel):
 
     # ===== Reward bookkeeping =====
     reward_events: List[str]
+
+    # messages from the environment to the agent, FOR EACH STEP
+    env_feedback: List[str] = Field(default_factory=list)
 
     # ===== Config =====
     difficulty: str
