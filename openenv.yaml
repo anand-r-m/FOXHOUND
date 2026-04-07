@@ -1,0 +1,9 @@
+spec_version: "0.1"
+name: foxhound-forensic-audit
+type: environment
+description: "Adversarial forensic audit simulation"
+runtime: python
+app:
+  module: server.app
+  attr: app
+port: 7860
