@@ -1,0 +1,15 @@
+{
+    "task_id": "hard",
+    "difficulty": "hard",
+    "fraud_type": "phantom_revenue",
+    "company_seed": 42,
+    "max_steps": 20,
+    "cfo_strategy": "proactive",
+    "cfo_budget_per_round": 5,
+    "hide_duration_rounds": 2,
+    "smoking_gun_count": 2,
+    "circumstantial_count": 4,
+    "clean_count": 6,
+    "max_external_confirmations": 3,
+    "external_confirmation_cost": 2
+}

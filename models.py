@@ -189,21 +189,21 @@ class TaskConfig(BaseModel):
 
     # core setup
     fraud_type: FraudType
-    company_seed: int = 42
-    max_steps: int = 20
+    company_seed: int 
+    max_steps: int 
 
     # CFO configuration
     cfo_strategy: str  # "passive" | "reactive" | "proactive"
-    cfo_budget_per_round: int = 0
-    hide_duration_rounds: int = 2
+    cfo_budget_per_round: int 
+    hide_duration_rounds: int 
 
     # evidence distribution
-    smoking_gun_count: int = 1
-    circumstantial_count: int = 3
-    clean_count: int = 6
+    smoking_gun_count: int 
+    circumstantial_count: int 
+    clean_count: int =
 
     # external confirmation constraints
-    max_external_confirmations: int = 3
-    external_confirmation_cost: int = 2  # counts as 2 steps
+    max_external_confirmations: int 
+    external_confirmation_cost: int   # counts as 2 steps
 
     

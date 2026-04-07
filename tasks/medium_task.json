@@ -1,0 +1,15 @@
+{
+    "task_id": "medium",
+    "difficulty": "medium",
+    "fraud_type": "round_tripping",
+    "company_seed": 42,
+    "max_steps": 20,
+    "cfo_strategy": "reactive",
+    "cfo_budget_per_round": 3,
+    "hide_duration_rounds": 2,
+    "smoking_gun_count": 1,
+    "circumstantial_count": 3,
+    "clean_count": 6,
+    "max_external_confirmations": 3,
+    "external_confirmation_cost": 2
+}
