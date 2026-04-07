@@ -174,7 +174,6 @@ class AuditState(BaseModel):
     
     # ===== External Confirmation Tracking =====
     external_confirmations_used: int = 0
-    env_feedback: List[str] = Field(default_factory=list)
 
 # reward info for the agent grader output
 class RewardInfo(BaseModel):

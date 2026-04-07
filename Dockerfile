@@ -12,9 +12,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-
 COPY models.py env.py agent.py ./
+COPY tasks/ ./tasks/
 COPY server/ ./server/
+COPY tests/ ./tests/
 
 EXPOSE 7860
 

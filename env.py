@@ -158,6 +158,15 @@ class ForensicAuditEnv:
         # stored on the instance so CFO methods can use it without being passed it
         self._rng: Optional[random.Random] = None
 
+    def _require_state(self) -> AuditState:
+        """Narrow Optional state for type checkers; same invariant as runtime asserts in step()."""
+        assert self._state is not None, "Call reset() before using the environment"
+        return self._state
+
+    def _require_rng(self) -> random.Random:
+        assert self._rng is not None, "Call reset() before CFO randomness is available"
+        return self._rng
+
     # ─────────────────────────────────────────
     # Public API
     # ─────────────────────────────────────────
@@ -248,8 +257,7 @@ class ForensicAuditEnv:
         return self._build_observation()
 
     def step(self, action: AuditAction) -> tuple[AuditObservation, RewardInfo, bool, dict]:
-        assert self._state is not None, "Call reset() before step()"
-        s = self._state
+        s = self._require_state()
 
         # wipe all per-round fields at the start of each step
         # these are rebuilt fresh every round so the observation only shows current-round info
@@ -298,8 +306,7 @@ class ForensicAuditEnv:
         return self._build_observation(), reward_info, done, {}
 
     def state(self) -> AuditState:
-        assert self._state is not None, "Call reset() before state()"
-        return self._state
+        return self._require_state()
 
     # ─────────────────────────────────────────
     # Action Handlers
@@ -308,7 +315,7 @@ class ForensicAuditEnv:
     # ─────────────────────────────────────────
 
     def _handle_request_category(self, action: AuditAction, rewards: dict):
-        s = self._state
+        s = self._require_state()
         category = action.params.get("category")
 
         # normalize: agent may pass a DocumentCategory enum or a raw string
@@ -369,7 +376,7 @@ class ForensicAuditEnv:
             s.env_feedback.append(f"All documents in '{category}' are currently concealed")
 
     def _handle_cross_reference(self, action: AuditAction, rewards: dict):
-        s = self._state
+        s = self._require_state()
         doc_a_id = action.params.get("doc_a")
         doc_b_id = action.params.get("doc_b")
 
@@ -404,7 +411,7 @@ class ForensicAuditEnv:
             s.env_feedback.append(f"No contradiction found between {doc_a_id} and {doc_b_id}")
 
     def _handle_flag_anomaly(self, action: AuditAction, rewards: dict):
-        s = self._state
+        s = self._require_state()
         doc_id = action.params.get("doc_id")
         description = action.params.get("description", "no description")
 
@@ -435,7 +442,7 @@ class ForensicAuditEnv:
         s.env_feedback.append(f"Anomaly recorded on '{doc_id}'")
 
     def _handle_external_confirmation(self, action: AuditAction, rewards: dict):
-        s = self._state
+        s = self._require_state()
         category = action.params.get("category")
 
         # normalize enum → string same as request_category
@@ -492,7 +499,7 @@ class ForensicAuditEnv:
         )
 
     def _handle_submit_findings(self, action: AuditAction, rewards: dict):
-        s = self._state
+        s = self._require_state()
         # store the submission — done flag will be True on next observation build
         s.findings_submitted = action.params
         s.env_feedback.append("Findings submitted — episode ending")
@@ -502,7 +509,8 @@ class ForensicAuditEnv:
     # ─────────────────────────────────────────
 
     def _cfo_react(self, agent_action: AuditAction):
-        s = self._state
+        s = self._require_state()
+        rng = self._require_rng()
 
         # passive CFO does nothing — easy task
         if s.cfo_strategy == "passive":
@@ -526,7 +534,7 @@ class ForensicAuditEnv:
                 doc = s.document_index[doc_id]
                 if doc.location == category and doc.status == DocumentStatus.available:
                     # 50/50 between hide and reclassify — uses seeded rng for determinism
-                    if self._rng.random() < 0.5:
+                    if rng.random() < 0.5:
                         self._cfo_hide(doc_id)
                     else:
                         self._cfo_reclassify(doc_id)
@@ -543,7 +551,7 @@ class ForensicAuditEnv:
                     doc.evidence_type == EvidenceType.smoking_gun
                     and doc.status == DocumentStatus.available
                 ):
-                    if self._rng.random() < 0.5:
+                    if rng.random() < 0.5:
                         self._cfo_hide(doc_id)
                     else:
                         self._cfo_reclassify(doc_id)
@@ -551,7 +559,7 @@ class ForensicAuditEnv:
 
     def _cfo_hide(self, doc_id: str):
         """Temporarily hide a document. Auto-restores after hide_duration_rounds steps."""
-        s = self._state
+        s = self._require_state()
         doc = s.document_index[doc_id]
         doc.status = DocumentStatus.hidden
         # set the expiry step — _restore_expired_docs checks this every step
@@ -565,7 +573,7 @@ class ForensicAuditEnv:
 
     def _cfo_reclassify(self, doc_id: str):
         """Move a document to misc_ops, making it unfindable via its original category."""
-        s = self._state
+        s = self._require_state()
         doc = s.document_index[doc_id]
 
         old_location = doc.location
@@ -591,7 +599,7 @@ class ForensicAuditEnv:
 
     def _restore_expired_docs(self):
         """Run at the start of each step. Returns hidden/reclassified docs whose timer expired."""
-        s = self._state
+        s = self._require_state()
         for doc_id, doc in s.document_index.items():
             if (
                 doc.status in (DocumentStatus.hidden, DocumentStatus.reclassified)
@@ -622,7 +630,7 @@ class ForensicAuditEnv:
     # ─────────────────────────────────────────
 
     def _build_observation(self) -> AuditObservation:
-        s = self._state
+        s = self._require_state()
 
         # document_status: only docs the agent has already received
         # agent has no visibility into docs it hasn't touched yet
