@@ -200,10 +200,10 @@ class TaskConfig(BaseModel):
     # evidence distribution
     smoking_gun_count: int 
     circumstantial_count: int 
-    clean_count: int =
+    clean_count: int
 
     # external confirmation constraints
     max_external_confirmations: int 
-    external_confirmation_cost: int   # counts as 2 steps
+    external_confirmation_cost: int   
 
     
