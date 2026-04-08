@@ -1,4 +1,20 @@
+---
+title: FOXHOUND
+emoji: 🕵️
+colorFrom: red
+colorTo: orange
+sdk: docker
+app_port: 7860
+short_description: Forensic audit environment with adversarial CFO dynamics
+tags:
+  - environment
+  - openm
+  - reinforcement-learning
+  - audit
+  - adversarial
+---
 
+# FOXHOUND
 
 We've built a forensic audit simulation environment where the agent must detect evidence of corporate fraud, whilst combating an adversarial CFO that interferes with the evidence (hence incorporating partial observability)
 
@@ -220,4 +236,139 @@ Our USPs:
 - The auditing process is reframed as a game-like RL problem
 	- working with constrained resources (steps)
 	- whilst dealing with adversarial interference
+
+
+# 8. How to Run
+
+## Prerequisites
+- Python 3.10+ (tested on 3.12)
+- Docker (optional, for containerized deployment)
+
+## Local Installation
+
+```bash
+# Clone repository
+git clone https://github.com/anand-r-m/FOXHOUND.git
+cd FOXHOUND
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Running the API Server
+
+### Option 1: Direct Python
+```bash
+uvicorn server.app:app --host 0.0.0.0 --port 7860
+```
+
+### Option 2: Docker
+```bash
+docker build -t foxhound .
+docker run --rm -p 7860:7860 foxhound
+```
+
+The API will be available at `http://localhost:7860`
+
+**All endpoints return JSON responses.**
+
+## API Endpoints
+
+- `GET /` — Service metadata
+- `GET /health` — Health check (`{"status":"ok"}`)
+- `POST /reset?task_id=easy|medium|hard` — Start new episode
+- `POST /step` — Take action (JSON body with `action_type` and `params`)
+- `GET /state` — Get full environment state
+- `GET /docs` — Interactive Swagger UI
+
+## Testing the API
+
+### Quick Health Check
+```bash
+curl http://localhost:7860/health
+```
+
+### Start an Episode
+```bash
+curl -X POST "http://localhost:7860/reset?task_id=easy"
+```
+
+### Take an Action
+```bash
+curl -X POST "http://localhost:7860/step" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action_type": "request_category",
+    "params": {
+      "category": "financial_statements"
+    }
+  }'
+```
+
+## Running the Baseline Agent
+
+The baseline agent runs against the API (local or deployed):
+
+```bash
+# Against local server
+python demo.py --agent baseline
+
+# Against deployed Space
+python demo.py --url https://anand-r-m-foxhound.hf.space --agent baseline
+```
+
+## Running Inference Script
+
+The inference script runs all 3 tasks and produces structured logs:
+
+```bash
+# Against local server
+python inference.py
+
+# Against deployed Space
+ENV_URL="https://anand-r-m-foxhound.hf.space" python inference.py
+```
+
+Expected output:
+```
+[START] easy easy
+[STEP] 1 request_category 0.0400 False
+[STEP] 2 request_category 0.0000 False
+...
+[END] easy 0.5900
+```
+
+## Running Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run smoke tests only
+pytest tests/smoke_test.py -v
+
+# Run integration tests only
+pytest tests/test_phase3_integration.py -v
+```
+
+## Environment Variables (for LLM agent)
+
+If using the LLM agent mode:
+
+```bash
+export OPENAI_API_KEY=your_key_here
+
+# Optional: specify model (defaults to gpt-4o-mini if not set)
+export OPENAI_MODEL=gpt-4o-mini
+
+python demo.py --agent llm
+```
+
+If `OPENAI_API_KEY` is not set, the system will use the baseline heuristic agent instead.
+
+## Live Demo
+
+Try the deployed version here:
+
+https://anand-r-m-foxhound.hf.space
 
