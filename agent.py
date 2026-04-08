@@ -374,14 +374,29 @@ class LLMAgent:
 
         temperature = 0.1 if obs.done or obs.remaining_steps <= 3 else 0.2
         last_err: Exception | None = None
+        # Some LiteLLM proxy models don't support response_format; start with it,
+        # fall back to plain text mode if the first call raises a proxy/model error.
+        use_json_format = True
 
         for attempt in range(self._max_parse_retries + 1):
-            completion = self._client.chat.completions.create(
-                model=self._model,
-                temperature=temperature,
-                response_format={"type": "json_object"},
-                messages=api_messages,
-            )
+            try:
+                kwargs: dict[str, Any] = dict(
+                    model=self._model,
+                    temperature=temperature,
+                    messages=api_messages,
+                )
+                if use_json_format:
+                    kwargs["response_format"] = {"type": "json_object"}
+                completion = self._client.chat.completions.create(**kwargs)
+            except Exception as e:
+                # If json_object mode caused the error, retry without it
+                if use_json_format:
+                    use_json_format = False
+                    last_err = e
+                    continue
+                last_err = e
+                break
+
             content = completion.choices[0].message.content
             if not content:
                 last_err = RuntimeError("Empty LLM response")

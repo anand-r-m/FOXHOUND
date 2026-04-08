@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY models.py env.py agent.py grader.py inference.py ./
+COPY openenv.yaml pyproject.toml ./
 COPY tasks/ ./tasks/
 COPY server/ ./server/
 COPY tests/ ./tests/
