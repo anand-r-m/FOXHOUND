@@ -53,10 +53,14 @@ def test_e2e_request_category_then_submit_findings(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert "observation" in body and "reward" in body and "done" in body and "info" in body
-    assert isinstance(body["reward"]["total"], (int, float))
-    assert "components" in body["reward"]
-    assert body["done"] is False
+    assert "observation" in body and "reward" in body
+    assert "terminated" in body and "truncated" in body and "info" in body
+    # reward is now scalar float (openM standard)
+    assert isinstance(body["reward"], (int, float))
+    # reward breakdown moved to info
+    assert "reward_breakdown" in body["info"]
+    assert body["terminated"] is False
+    assert body["truncated"] is False
     assert isinstance(body["info"], dict)
 
     r = client.get("/state")
@@ -76,7 +80,7 @@ def test_e2e_request_category_then_submit_findings(client):
         },
     )
     assert r.status_code == 200
-    assert r.json()["done"] is True
+    assert r.json()["terminated"] is True
 
 
 def test_cross_reference_after_two_categories(client):
@@ -100,7 +104,8 @@ def test_cross_reference_after_two_categories(client):
         },
     )
     assert r.status_code == 200
-    assert r.json()["reward"]["total"] > 0
+    # reward is scalar float now
+    assert r.json()["reward"] > 0
 
 
 def test_flag_anomaly(client):
