@@ -79,12 +79,18 @@ async def step(action: AuditAction):
     global env
     if env is None:
         raise HTTPException(status_code=400, detail="Call POST /reset first")
-    observation, reward, done, info = env.step(action)
+    observation, reward_info, done, info = env.step(action)
+    
+    # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
         "observation": observation.model_dump(),
-        "reward": reward.model_dump(),
-        "done": done,
-        "info": _serialize_info(info),
+        "reward": reward_info.total,  # scalar float, not dict
+        "terminated": done,
+        "truncated": False,  # this env doesn't truncate episodes
+        "info": {
+            **_serialize_info(info),
+            "reward_breakdown": reward_info.model_dump(),  # preserve detail in info
+        },
     }
 
 
