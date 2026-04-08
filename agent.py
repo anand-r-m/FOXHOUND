@@ -348,7 +348,8 @@ class LLMAgent:
                 "or pass client=OpenAI(api_key=...)."
             )
         
-        self._model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        # Check MODEL_NAME (Scaler standard) then OPENAI_MODEL (legacy) then default
+        self._model = model or os.environ.get("MODEL_NAME") or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         
         if client is not None:
             self._client = client

@@ -1,16 +1,21 @@
 """
 inference.py — FOXHOUND Baseline Inference Script
 ==================================================
-Runs the baseline agent against all three tasks (easy, medium, hard) and emits
+Runs the agent against all three tasks (easy, medium, hard) and emits
 structured logs in the exact format required by Scaler's evaluation pipeline.
 
-Environment Variables (REQUIRED):
-    API_BASE_URL   - The API endpoint for the LLM (default provided for fallback)
-    MODEL_NAME     - The model identifier to use for inference (default provided)
-    HF_TOKEN       - Your Hugging Face / API key (NO DEFAULT - must be set)
+Uses LLMAgent (OpenAI via competition proxy) when API credentials are present,
+falls back to BaselineAgent (rule-based) for local testing without credentials.
 
-Usage:
-    export HF_TOKEN=hf_...
+Environment Variables:
+    APIKEY         - Competition proxy API key (injected by Scaler)
+    APIBASE_URL    - Competition proxy base URL (injected by Scaler)
+    OPENAI_API_KEY - Standard OpenAI key (local dev fallback)
+    MODEL_NAME     - Model identifier (default: gpt-4o-mini)
+    ENV_URL        - FOXHOUND server URL (default: http://127.0.0.1:7860)
+
+Usage (local):
+    export OPENAI_API_KEY=sk-...
     python inference.py
 """
 
@@ -28,7 +33,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from agent import BaselineAgent
+from agent import BaselineAgent, LLMAgent
 from models import AuditObservation
 
 # ============================================================================
@@ -88,27 +93,40 @@ def log_end(task_id: str, final_score: float) -> None:
 # Inference Logic
 # ============================================================================
 
+def _make_agent():
+    """
+    Return LLMAgent when API credentials are available (routes through competition proxy),
+    otherwise fall back to BaselineAgent for local testing without credentials.
+    """
+    if API_KEY:
+        try:
+            return LLMAgent(model=MODEL_NAME)
+        except Exception as e:
+            print(f"⚠ LLMAgent init failed ({e}), falling back to BaselineAgent", flush=True)
+    return BaselineAgent()
+
+
 def run_task(client_http: httpx.Client, task_id: str) -> float:
     """
-    Run the baseline agent on a single task and return the final score.
-    
+    Run the agent on a single task and return the final score.
+
     Args:
         client_http: HTTP client for API calls
         task_id: Task identifier (easy/medium/hard)
-        
+
     Returns:
         Final cumulative reward as float in [0.0, 1.0]
     """
     # Emit START log
     log_start(task_id, task_id)  # difficulty = task_id for this env
-    
+
     # Reset episode
     response = client_http.post(f"{BASE_URL}/reset", params={"task_id": task_id})
     response.raise_for_status()
     obs_dict = response.json()
-    
-    # Initialize agent and tracking
-    agent = BaselineAgent()
+
+    # Initialize agent (LLM if credentials present, else rule-based)
+    agent = _make_agent()
     cumulative_reward = 0.0
     step = 0
     done = False
@@ -165,16 +183,21 @@ def main() -> None:
     print(f"Target URL: {BASE_URL}", flush=True)
     print("=" * 60, flush=True)
     
-    # Health check
+    # Health check — retry up to 10 times to handle slow cold starts
+    import time
     with httpx.Client(timeout=TIMEOUT) as http_client:
-        try:
-            health_resp = http_client.get(f"{BASE_URL}/health")
-            health_resp.raise_for_status()
-            print(f"✓ Health check passed: {health_resp.json()}", flush=True)
-        except Exception as e:
-            print(f"✗ Health check failed: {e}", file=sys.stderr, flush=True)
-            print("Ensure the server is running: uvicorn server.app:app --host 0.0.0.0 --port 7860", file=sys.stderr, flush=True)
-            sys.exit(1)
+        for attempt in range(1, 11):
+            try:
+                health_resp = http_client.get(f"{BASE_URL}/health")
+                health_resp.raise_for_status()
+                print(f"✓ Health check passed: {health_resp.json()}", flush=True)
+                break
+            except Exception as e:
+                if attempt == 10:
+                    print(f"✗ Health check failed after {attempt} attempts: {e}", file=sys.stderr, flush=True)
+                    sys.exit(1)
+                print(f"  Health check attempt {attempt}/10 failed ({e}), retrying in 3s...", flush=True)
+                time.sleep(3)
         
         print("=" * 60, flush=True)
         

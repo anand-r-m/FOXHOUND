@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
 from models import AuditAction, TaskConfig
@@ -19,7 +19,9 @@ _TASK_FILES = {
     "hard": "hard_tasks.json",
 }
 
+# Single global env (simple; validator runs one episode at a time)
 env: ForensicAuditEnv | None = None
+_current_task_id: str | None = None
 
 
 def _load_task_config(task_id: str) -> TaskConfig:
@@ -67,29 +69,31 @@ async def health_check():
 
 @app.post("/reset")
 async def reset(task_id: str = "easy"):
-    global env
+    global env, _current_task_id
     config = _load_task_config(task_id)
     env = ForensicAuditEnv(config)
+    _current_task_id = task_id
     observation = env.reset()
     return observation.model_dump()
 
 
 @app.post("/step")
 async def step(action: AuditAction):
-    global env
+    global env, _current_task_id
     if env is None:
         raise HTTPException(status_code=400, detail="Call POST /reset first")
     observation, reward_info, done, info = env.step(action)
-    
+
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
         "observation": observation.model_dump(),
-        "reward": reward_info.total,  # scalar float, not dict
+        "reward": reward_info.total,       # scalar float per openM standard
         "terminated": done,
-        "truncated": False,  # this env doesn't truncate episodes
+        "truncated": False,                # this env never truncates
         "info": {
             **_serialize_info(info),
-            "reward_breakdown": reward_info.model_dump(),  # preserve detail in info
+            "task_id": _current_task_id,
+            "reward_breakdown": reward_info.model_dump(),
         },
     }
 
