@@ -338,9 +338,9 @@ class LLMAgent:
         client: OpenAI | None = None,
         max_parse_retries: int = 2,
     ):
-        # Prefer competition proxy vars; fall back to standard OpenAI vars
-        key = os.environ.get("APIKEY") or os.environ.get("OPENAI_API_KEY")
-        base_url = os.environ.get("APIBASE_URL") or os.environ.get("API_BASE_URL")
+        # Scaler injects API_KEY + API_BASE_URL; fall back to dev vars
+        key = os.environ.get("API_KEY") or os.environ.get("APIKEY") or os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("API_BASE_URL") or os.environ.get("APIBASE_URL")
         
         if not key and client is None:
             raise RuntimeError(

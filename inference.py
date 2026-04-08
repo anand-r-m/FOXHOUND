@@ -40,9 +40,9 @@ from models import AuditObservation
 # Environment Variables (as specified in Scaler requirements)
 # ============================================================================
 
-# Priority order: Competition vars (APIKEY, APIBASE_URL) > Standard vars
-API_KEY = os.getenv("APIKEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
-API_BASE_URL = os.getenv("APIBASE_URL") or os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+# Priority order: Scaler proxy vars > standard dev vars
+API_KEY = os.getenv("API_KEY") or os.getenv("APIKEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
+API_BASE_URL = os.getenv("API_BASE_URL") or os.getenv("APIBASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 # Optional: for Docker-based environments
