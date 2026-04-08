@@ -25,6 +25,7 @@ dependencies = [
     "iniconfig>=2.3.0",
     "jiter>=0.13.0",
     "openai>=2.30.0",
+    "openenv-core>=0.2.0",
     "packaging>=26.0",
     "pluggy>=1.6.0",
     "pydantic>=2.12.5",
@@ -54,3 +55,6 @@ addopts = "-v"
 include = ["*.py", "server", "tests"]
 exclude = ["**/__pycache__", ".venv", "venv"]
 typeCheckingMode = "basic"
+
+[project.scripts]
+server = "server.app:main"

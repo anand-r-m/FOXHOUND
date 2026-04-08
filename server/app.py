@@ -100,3 +100,13 @@ async def state():
     if env is None:
         raise HTTPException(status_code=400, detail="Call POST /reset first")
     return env.state().model_dump()
+
+
+def main() -> None:
+    """Entry point for programmatic server launch."""
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=7860)
+
+
+if __name__ == "__main__":
+    main()
