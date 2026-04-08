@@ -55,10 +55,6 @@ def _guess_fraud_type(obs: AuditObservation) -> str:
 class BaselineAgent:
     """Rule-based policy: sweep categories, one cross_reference, then submit."""
 
-    _MIN_CATEGORIES: int = 6
-    _MAX_CROSS_REFS: int = 2
-    _SIGNAL_THRESHOLD: int = 2
-
     def __init__(self) -> None:
         self._category_order: list[str] = [
             DocumentCategory.financial_statements.value,
@@ -70,8 +66,7 @@ class BaselineAgent:
             DocumentCategory.tax_filings.value,
             DocumentCategory.hr_records.value,
         ]
-        self._cross_referenced_count: int = 0
-        self._flagged_doc_ids: set[str] = set()
+        self._cross_referenced: bool = False
 
     def act(self, observation: AuditObservation | dict) -> AuditAction:
         obs = _as_observation(observation)
@@ -87,32 +82,17 @@ class BaselineAgent:
             )
 
         requested = set(obs.requested_categories_so_far)
+        for cat in self._category_order:
+            if cat not in requested:
+                return AuditAction(
+                    action_type=ActionType.request_category,
+                    params={"category": cat},
+                )
 
-        if len(requested) < self._MIN_CATEGORIES:
-            for cat in self._category_order:
-                if cat not in requested:
-                    return AuditAction(
-                        action_type=ActionType.request_category,
-                        params={"category": cat},
-                    )
-
-        for doc_id, summary in obs.documents_received.items():
-            if doc_id not in self._flagged_doc_ids:
-                signals = _substantive_signals(list(summary.key_signals))
-                if len(signals) >= self._SIGNAL_THRESHOLD:
-                    self._flagged_doc_ids.add(doc_id)
-                    return AuditAction(
-                        action_type=ActionType.flag_anomaly,
-                        params={
-                            "doc_id": doc_id,
-                            "description": "; ".join(signals[:3]),
-                        },
-                    )
-
-        if self._cross_referenced_count < self._MAX_CROSS_REFS and len(obs.documents_received) >= 2:
+        if not self._cross_referenced and len(obs.documents_received) >= 2:
             pair = self._pick_cross_reference_pair(obs)
             if pair:
-                self._cross_referenced_count += 1
+                self._cross_referenced = True
                 doc_a, doc_b = pair
                 return AuditAction(
                     action_type=ActionType.cross_reference,
@@ -122,6 +102,7 @@ class BaselineAgent:
         obstruction: list[str] = []
         obstruction.extend(obs.cfo_visible_actions[:8])
         obstruction.extend(obs.document_status_delta[:8])
+
         return AuditAction(
             action_type=ActionType.submit_findings,
             params={
