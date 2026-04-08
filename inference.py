@@ -35,9 +35,10 @@ from models import AuditObservation
 # Environment Variables (as specified in Scaler requirements)
 # ============================================================================
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+# Priority order: Competition vars (APIKEY, APIBASE_URL) > Standard vars
+API_KEY = os.getenv("APIKEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
+API_BASE_URL = os.getenv("APIBASE_URL") or os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-HF_TOKEN = os.getenv("HF_TOKEN")  # NO DEFAULT - must be provided
 
 # Optional: for Docker-based environments
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
@@ -48,8 +49,8 @@ LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 # Initialize OpenAI client (required by Scaler even though baseline doesn't use LLM)
 # This demonstrates compliance; LLMAgent in agent.py uses this pattern for actual LLM calls
-if HF_TOKEN:
-    client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL)
+if API_KEY:
+    client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
 else:
     # Baseline agent doesn't require LLM, but we initialize for compliance
     client = None
@@ -160,7 +161,7 @@ def main() -> None:
     print("=" * 60, flush=True)
     print(f"API_BASE_URL: {API_BASE_URL}", flush=True)
     print(f"MODEL_NAME: {MODEL_NAME}", flush=True)
-    print(f"HF_TOKEN: {'SET' if HF_TOKEN else 'NOT SET'}", flush=True)
+    print(f"API_KEY: {'SET' if API_KEY else 'NOT SET'}", flush=True)
     print(f"Target URL: {BASE_URL}", flush=True)
     print("=" * 60, flush=True)
     

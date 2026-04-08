@@ -338,14 +338,25 @@ class LLMAgent:
         client: OpenAI | None = None,
         max_parse_retries: int = 2,
     ):
-        key = os.environ.get("OPENAI_API_KEY")
+        # Prefer competition proxy vars; fall back to standard OpenAI vars
+        key = os.environ.get("APIKEY") or os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("APIBASE_URL") or os.environ.get("API_BASE_URL")
+        
         if not key and client is None:
             raise RuntimeError(
-                "OPENAI_API_KEY is not set; export it before using LLMAgent, "
+                "No API key found. Set APIKEY (competition proxy) or OPENAI_API_KEY, "
                 "or pass client=OpenAI(api_key=...)."
             )
+        
         self._model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-        self._client = client or OpenAI(api_key=key)
+        
+        if client is not None:
+            self._client = client
+        elif base_url:
+            self._client = OpenAI(api_key=key, base_url=base_url)
+        else:
+            self._client = OpenAI(api_key=key)
+        
         self._max_parse_retries = max(0, int(max_parse_retries))
 
     def act(self, observation: AuditObservation | dict) -> AuditAction:
