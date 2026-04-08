@@ -338,26 +338,28 @@ class LLMAgent:
         client: OpenAI | None = None,
         max_parse_retries: int = 2,
     ):
-        # Scaler injects API_KEY + API_BASE_URL; fall back to dev vars
-        key = os.environ.get("API_KEY") or os.environ.get("APIKEY") or os.environ.get("OPENAI_API_KEY")
-        base_url = os.environ.get("API_BASE_URL") or os.environ.get("APIBASE_URL")
-        
-        if not key and client is None:
-            raise RuntimeError(
-                "No API key found. Set APIKEY (competition proxy) or OPENAI_API_KEY, "
-                "or pass client=OpenAI(api_key=...)."
-            )
-        
-        # Check MODEL_NAME (Scaler standard) then OPENAI_MODEL (legacy) then default
-        self._model = model or os.environ.get("MODEL_NAME") or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-        
+        # If a pre-built client is passed in (e.g. from inference.py), use it directly.
+        # This is the preferred path — the caller controls exactly which proxy is used.
         if client is not None:
             self._client = client
-        elif base_url:
-            self._client = OpenAI(api_key=key, base_url=base_url)
         else:
-            self._client = OpenAI(api_key=key)
-        
+            # Build client from env vars.
+            # Scaler injects API_KEY + API_BASE_URL — these take absolute priority.
+            key = os.environ.get("API_KEY") or os.environ.get("OPENAI_API_KEY")
+            base_url = os.environ.get("API_BASE_URL")
+
+            if not key:
+                raise RuntimeError(
+                    "No API key found. Set API_KEY (Scaler proxy) or OPENAI_API_KEY."
+                )
+
+            if base_url:
+                self._client = OpenAI(api_key=key, base_url=base_url)
+            else:
+                self._client = OpenAI(api_key=key)
+
+        # MODEL_NAME (Scaler standard) > OPENAI_MODEL (legacy) > default
+        self._model = model or os.environ.get("MODEL_NAME") or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         self._max_parse_retries = max(0, int(max_parse_retries))
 
     def act(self, observation: AuditObservation | dict) -> AuditAction:

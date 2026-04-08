@@ -1,28 +1,22 @@
 """
-inference.py — FOXHOUND Baseline Inference Script
-==================================================
-Runs the agent against all three tasks (easy, medium, hard) and emits
+inference.py — FOXHOUND Inference Script
+=========================================
+Runs the LLM agent against all three tasks (easy, medium, hard) and emits
 structured logs in the exact format required by Scaler's evaluation pipeline.
 
-Uses LLMAgent (OpenAI via competition proxy) when API credentials are present,
-falls back to BaselineAgent (rule-based) for local testing without credentials.
-
-Environment Variables:
-    APIKEY         - Competition proxy API key (injected by Scaler)
-    APIBASE_URL    - Competition proxy base URL (injected by Scaler)
-    OPENAI_API_KEY - Standard OpenAI key (local dev fallback)
+Environment Variables (injected by Scaler):
+    API_KEY        - Competition proxy API key (REQUIRED)
+    API_BASE_URL   - Competition proxy base URL (REQUIRED)
     MODEL_NAME     - Model identifier (default: gpt-4o-mini)
     ENV_URL        - FOXHOUND server URL (default: http://127.0.0.1:7860)
-
-Usage (local):
-    export OPENAI_API_KEY=sk-...
-    python inference.py
+    LOCAL_IMAGE_NAME - Optional Docker image name
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -33,176 +27,143 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from agent import BaselineAgent, LLMAgent
+from agent import LLMAgent, BaselineAgent
 from models import AuditObservation
 
 # ============================================================================
-# Environment Variables (as specified in Scaler requirements)
+# OpenAI client — exactly as Scaler requires
+# Uses os.environ["API_KEY"] and os.environ["API_BASE_URL"] (Scaler injects these)
 # ============================================================================
 
-# Priority order: Scaler proxy vars > standard dev vars
-API_KEY = os.getenv("API_KEY") or os.getenv("APIKEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
-API_BASE_URL = os.getenv("API_BASE_URL") or os.getenv("APIBASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+API_KEY = os.environ.get("API_KEY")
+API_BASE_URL = os.environ.get("API_BASE_URL")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME")
 
-# Optional: for Docker-based environments
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
-
-# ============================================================================
-# Scaler Required: OpenAI Client Configuration
-# ============================================================================
-
-# Initialize OpenAI client (required by Scaler even though baseline doesn't use LLM)
-# This demonstrates compliance; LLMAgent in agent.py uses this pattern for actual LLM calls
-if API_KEY:
-    client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
+# Build the client exactly as Scaler's sample shows
+if API_KEY and API_BASE_URL:
+    client = OpenAI(
+        api_key=API_KEY,
+        base_url=API_BASE_URL,
+    )
+elif API_KEY:
+    client = OpenAI(api_key=API_KEY)
 else:
-    # Baseline agent doesn't require LLM, but we initialize for compliance
     client = None
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
-BASE_URL = os.getenv("ENV_URL", "http://127.0.0.1:7860")  # Can override with ENV_URL
+BASE_URL = os.environ.get("ENV_URL", "http://127.0.0.1:7860")
 TASK_IDS = ["easy", "medium", "hard"]
 MAX_STEPS_PER_EPISODE = 500
 TIMEOUT = 120.0
 
 
 # ============================================================================
-# Structured Logging Functions (Scaler Format)
+# Structured Logging (Scaler format — do not change)
 # ============================================================================
 
 def log_start(task_id: str, difficulty: str) -> None:
-    """Emit [START] log in exact Scaler format."""
     print(f"[START] {task_id} {difficulty}", flush=True)
 
 
 def log_step(step: int, action_type: str, reward: float, done: bool) -> None:
-    """Emit [STEP] log in exact Scaler format."""
     print(f"[STEP] {step} {action_type} {reward:.4f} {done}", flush=True)
 
 
 def log_end(task_id: str, final_score: float) -> None:
-    """Emit [END] log in exact Scaler format."""
     print(f"[END] {task_id} {final_score:.4f}", flush=True)
 
 
 # ============================================================================
-# Inference Logic
+# Agent factory — pass the already-constructed client so LLMAgent
+# always uses the proxy client, never re-reads env vars itself
 # ============================================================================
 
 def _make_agent():
-    """
-    Return LLMAgent when API credentials are available (routes through competition proxy),
-    otherwise fall back to BaselineAgent for local testing without credentials.
-    """
-    if API_KEY:
+    if client is not None:
         try:
-            return LLMAgent(model=MODEL_NAME)
+            return LLMAgent(model=MODEL_NAME, client=client)
         except Exception as e:
             print(f"⚠ LLMAgent init failed ({e}), falling back to BaselineAgent", flush=True)
     return BaselineAgent()
 
 
-def run_task(client_http: httpx.Client, task_id: str) -> float:
-    """
-    Run the agent on a single task and return the final score.
+# ============================================================================
+# Episode runner
+# ============================================================================
 
-    Args:
-        client_http: HTTP client for API calls
-        task_id: Task identifier (easy/medium/hard)
+def run_task(http_client: httpx.Client, task_id: str) -> float:
+    log_start(task_id, task_id)
 
-    Returns:
-        Final cumulative reward as float in [0.0, 1.0]
-    """
-    # Emit START log
-    log_start(task_id, task_id)  # difficulty = task_id for this env
-
-    # Reset episode
-    response = client_http.post(f"{BASE_URL}/reset", params={"task_id": task_id})
+    response = http_client.post(f"{BASE_URL}/reset", params={"task_id": task_id})
     response.raise_for_status()
     obs_dict = response.json()
 
-    # Initialize agent (LLM if credentials present, else rule-based)
     agent = _make_agent()
     cumulative_reward = 0.0
     step = 0
     done = False
-    
-    # Episode loop
+
     while not done and step < MAX_STEPS_PER_EPISODE:
-        # Get observation object
         obs = AuditObservation.model_validate(obs_dict)
-        
-        # Agent decides action
         action = agent.act(obs)
-        
-        # Send action to environment
-        step_response = client_http.post(
-            f"{BASE_URL}/step",
-            json=action.model_dump(),
-        )
-        step_response.raise_for_status()
-        step_data = step_response.json()
-        
-        # Extract standardized response fields
+
+        step_resp = http_client.post(f"{BASE_URL}/step", json=action.model_dump())
+        step_resp.raise_for_status()
+        step_data = step_resp.json()
+
         obs_dict = step_data["observation"]
-        reward = float(step_data["reward"])  # scalar float per openM standard
+        reward = float(step_data["reward"])
         done = bool(step_data["terminated"])
-        
-        # Update tracking
+
         step += 1
         cumulative_reward += reward
-        
-        # Emit STEP log
         log_step(step, action.action_type.value, reward, done)
-        
-        # Safety: check if episode should terminate
+
         if obs_dict.get("done", False):
             done = True
-    
-    # Clamp final score to [0.0, 1.0]
+
     final_score = max(0.0, min(1.0, cumulative_reward))
-    
-    # Emit END log
     log_end(task_id, final_score)
-    
     return final_score
 
 
+# ============================================================================
+# Main
+# ============================================================================
+
 def main() -> None:
-    """Run inference on all tasks and report results."""
     print("=" * 60, flush=True)
-    print("FOXHOUND Baseline Inference", flush=True)
+    print("FOXHOUND Inference", flush=True)
     print("=" * 60, flush=True)
-    print(f"API_BASE_URL: {API_BASE_URL}", flush=True)
-    print(f"MODEL_NAME: {MODEL_NAME}", flush=True)
-    print(f"API_KEY: {'SET' if API_KEY else 'NOT SET'}", flush=True)
-    print(f"Target URL: {BASE_URL}", flush=True)
+    print(f"API_KEY:      {'SET' if API_KEY else 'NOT SET'}", flush=True)
+    print(f"API_BASE_URL: {API_BASE_URL or 'NOT SET'}", flush=True)
+    print(f"MODEL_NAME:   {MODEL_NAME}", flush=True)
+    print(f"ENV_URL:      {BASE_URL}", flush=True)
     print("=" * 60, flush=True)
-    
-    # Health check — retry up to 10 times to handle slow cold starts
-    import time
+
     with httpx.Client(timeout=TIMEOUT) as http_client:
+        # Retry health check — handles cold starts
         for attempt in range(1, 11):
             try:
-                health_resp = http_client.get(f"{BASE_URL}/health")
-                health_resp.raise_for_status()
-                print(f"✓ Health check passed: {health_resp.json()}", flush=True)
+                r = http_client.get(f"{BASE_URL}/health")
+                r.raise_for_status()
+                print(f"✓ Health check passed: {r.json()}", flush=True)
                 break
             except Exception as e:
                 if attempt == 10:
-                    print(f"✗ Health check failed after {attempt} attempts: {e}", file=sys.stderr, flush=True)
+                    print(f"✗ Health check failed after {attempt} attempts: {e}",
+                          file=sys.stderr, flush=True)
                     sys.exit(1)
-                print(f"  Health check attempt {attempt}/10 failed ({e}), retrying in 3s...", flush=True)
+                print(f"  Attempt {attempt}/10 failed ({e}), retrying in 3s...", flush=True)
                 time.sleep(3)
-        
+
         print("=" * 60, flush=True)
-        
-        # Run all tasks
-        results = {}
+
+        results: dict[str, float] = {}
         for task_id in TASK_IDS:
             try:
                 score = run_task(http_client, task_id)
@@ -211,7 +172,7 @@ def main() -> None:
             except Exception as e:
                 print(f"✗ {task_id} FAILED: {e}", file=sys.stderr, flush=True)
                 results[task_id] = 0.0
-        
+
         print("=" * 60, flush=True)
         print("FINAL RESULTS:", flush=True)
         for task_id, score in results.items():
