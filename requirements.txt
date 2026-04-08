@@ -12,6 +12,7 @@ idna==3.11
 iniconfig==2.3.0
 jiter==0.13.0
 openai==2.30.0
+openenv-core>=0.2.0
 packaging==26.0
 pluggy==1.6.0
 pydantic==2.12.5
