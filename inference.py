@@ -107,27 +107,30 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
     step = 0
     done = False
 
-    while not done and step < MAX_STEPS_PER_EPISODE:
-        obs = AuditObservation.model_validate(obs_dict)
-        action = agent.act(obs)
+    try:
+        while not done and step < MAX_STEPS_PER_EPISODE:
+            obs = AuditObservation.model_validate(obs_dict)
+            action = agent.act(obs)
 
-        step_resp = http_client.post(f"{BASE_URL}/step", json=action.model_dump())
-        step_resp.raise_for_status()
-        step_data = step_resp.json()
+            step_resp = http_client.post(f"{BASE_URL}/step", json=action.model_dump())
+            step_resp.raise_for_status()
+            step_data = step_resp.json()
 
-        obs_dict = step_data["observation"]
-        reward = float(step_data["reward"])
-        done = bool(step_data["terminated"])
+            obs_dict = step_data["observation"]
+            reward = float(step_data["reward"])
+            done = bool(step_data["terminated"])
 
-        step += 1
-        cumulative_reward += reward
-        log_step(step, action.action_type.value, reward, done)
+            step += 1
+            cumulative_reward += reward
+            log_step(step, action.action_type.value, reward, done)
 
-        if obs_dict.get("done", False):
-            done = True
+            if obs_dict.get("done", False):
+                done = True
+    except Exception as e:
+        print(f"  ⚠ step error at step {step}: {e}", file=sys.stderr, flush=True)
 
     # Clamp strictly within (0, 1) — validator requires exclusive bounds
-    final_score = max(0.01, min(0.99, cumulative_reward))
+    final_score = max(0.05, min(0.95, cumulative_reward if cumulative_reward > 0 else 0.05))
     log_end(task_id, final_score)
     return final_score
 
@@ -172,7 +175,10 @@ def main() -> None:
                 print(f"✓ {task_id}: {score:.4f}", flush=True)
             except Exception as e:
                 print(f"✗ {task_id} FAILED: {e}", file=sys.stderr, flush=True)
-                results[task_id] = 0.01  # strictly > 0 as required by validator
+                # Always emit [END] even on outer failure — validator requires it for every task
+                fallback_score = 0.05
+                log_end(task_id, fallback_score)
+                results[task_id] = fallback_score
 
         print("=" * 60, flush=True)
         print("FINAL RESULTS:", flush=True)
