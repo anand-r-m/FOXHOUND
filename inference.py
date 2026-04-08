@@ -126,7 +126,8 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
         if obs_dict.get("done", False):
             done = True
 
-    final_score = max(0.0, min(1.0, cumulative_reward))
+    # Clamp strictly within (0, 1) — validator requires exclusive bounds
+    final_score = max(0.001, min(0.999, cumulative_reward))
     log_end(task_id, final_score)
     return final_score
 
@@ -171,7 +172,7 @@ def main() -> None:
                 print(f"✓ {task_id}: {score:.4f}", flush=True)
             except Exception as e:
                 print(f"✗ {task_id} FAILED: {e}", file=sys.stderr, flush=True)
-                results[task_id] = 0.0
+                results[task_id] = 0.001  # strictly > 0 as required by validator
 
         print("=" * 60, flush=True)
         print("FINAL RESULTS:", flush=True)
