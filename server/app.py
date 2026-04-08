@@ -49,6 +49,17 @@ def _serialize_info(info: object) -> dict:
     return {"raw": info}
 
 
+@app.get("/")
+async def root():
+    """HF Spaces and browsers open `/` by default; the API lives on other paths."""
+    return {
+        "service": "FOXHOUND API",
+        "health": "/health",
+        "openapi": "/openapi.json",
+        "docs": "/docs",
+    }
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}

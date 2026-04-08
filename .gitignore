@@ -1,0 +1,8 @@
+# Local Hugging Face Space git clone (separate repo → do not nest in this GitHub tree)
+/FOXHOUND/
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
