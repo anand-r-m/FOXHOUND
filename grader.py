@@ -412,7 +412,7 @@ def grade_submission(state: AuditState) -> RewardInfo:
 
     raw_total = sum(components.values())
     # Clamp strictly within (0, 1) — validator requires exclusive bounds
-    total = round(max(0.001, min(raw_total, 0.999)), 4)
+    total = round(max(0.01, min(raw_total, 0.99)), 4)
 
     return RewardInfo(total=total, components=components, events=events)
 
