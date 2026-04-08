@@ -87,7 +87,8 @@ def run_demo(base_url: str, *, use_llm: bool, agent_label: str) -> None:
                 r.raise_for_status()
                 data = r.json()
                 obs = data["observation"]
-                step_total = float(data["reward"]["total"])
+                # reward is now scalar float (openM standard), not dict
+                step_total = float(data["reward"])
                 total_step_reward += step_total
                 print(
                     f"  [STEP] {action.action_type.value} → "
