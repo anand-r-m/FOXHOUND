@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from models import AuditAction, TaskConfig
 from env import ForensicAuditEnv
+from grader import grade_submission
 
 app = FastAPI(title="FOXHOUND API")
 
@@ -88,6 +89,11 @@ async def step(action: AuditAction):
     reward_breakdown = reward_info.model_dump()
     reward_breakdown["total"] = clamped_total
 
+    final_score = None
+    if done:
+        graded = grade_submission(env.state())
+        final_score = graded.total  # clamped to (1e-6, 1 - 1e-6) in grader.py
+
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
         "observation": observation.model_dump(),
@@ -98,6 +104,7 @@ async def step(action: AuditAction):
             **_serialize_info(info),
             "task_id": _current_task_id,
             "reward_breakdown": reward_breakdown,
+            "score": final_score,
         },
     }
 
