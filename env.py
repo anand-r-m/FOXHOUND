@@ -299,7 +299,7 @@ class ForensicAuditEnv:
 
         raw_total = sum(reward_components.values())
         reward_info = RewardInfo(
-            total=clamp_task_score(raw_total),
+            total=raw_total,
             components=reward_components,
             events=list(s.reward_events),
         )

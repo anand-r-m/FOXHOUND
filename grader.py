@@ -410,8 +410,7 @@ def grade_submission(state: AuditState) -> RewardInfo:
     # ── TOTAL ─────────────────────────────────────────────────────────────────
 
     raw_total = sum(components.values())
-    # Single canonical clamp — never 0.0 or 1.0 (validator strict open interval)
-    total = clamp_task_score(raw_total)
+    total = round(min(max(raw_total, 0.01), 0.99), 3)
 
     return RewardInfo(total=total, components=components, events=events)
 

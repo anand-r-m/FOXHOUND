@@ -85,14 +85,14 @@ async def step(action: AuditAction):
         raise HTTPException(status_code=400, detail="Call POST /reset first")
     observation, reward_info, done, info = env.step(action)
 
-    clamped_total = clamp_task_score(reward_info.total)
+    clamped_total = round(min(max(reward_info.total, 0.01), 0.99), 3)
     reward_breakdown = reward_info.model_dump()
     reward_breakdown["total"] = clamped_total
 
     final_score = clamped_total
     if done:
         graded = grade_submission(env.state())
-        final_score = clamp_task_score(graded.total)
+        final_score = round(min(max(graded.total, 0.01), 0.99), 3)
 
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
