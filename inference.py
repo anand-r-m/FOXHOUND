@@ -134,6 +134,7 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
     cumulative_reward = 0.0
     step = 0
     done = False
+    api_final_score: float | None = None  # info["score"] from the terminating step
 
     try:
         while not done and step < MAX_STEPS_PER_EPISODE:
@@ -148,6 +149,13 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
             reward = float(step_data["reward"])
             done = bool(step_data["terminated"])
 
+            # Capture the graded final score the API returns on the terminating step.
+            # This is grade_submission() output — the authoritative task score.
+            if done:
+                raw_score = step_data.get("info", {}).get("score")
+                if raw_score is not None and math.isfinite(float(raw_score)):
+                    api_final_score = clamp_task_score(float(raw_score))
+
             step += 1
             cumulative_reward += reward
             log_step(step, action.action_type.value, reward, done)
@@ -157,11 +165,16 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
     except Exception as e:
         print(f"  ⚠ step error at step {step}: {e}", file=sys.stderr, flush=True)
 
-    if not math.isfinite(cumulative_reward):
-        cumulative_reward = 0.0
-    final_score = clamp_task_score(
-        cumulative_reward if cumulative_reward > 0 else TASK_SCORE_MIN
-    )
+    # Prefer the graded score from the API (grade_submission output).
+    # Fall back to clamped cumulative step rewards only if the API didn't return one.
+    if api_final_score is not None:
+        final_score = api_final_score
+    else:
+        if not math.isfinite(cumulative_reward):
+            cumulative_reward = 0.0
+        final_score = clamp_task_score(
+            cumulative_reward if cumulative_reward > 0 else TASK_SCORE_MIN
+        )
     log_end(task_id, final_score)
     return final_score
 
