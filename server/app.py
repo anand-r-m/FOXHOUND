@@ -89,7 +89,7 @@ async def step(action: AuditAction):
     reward_breakdown = reward_info.model_dump()
     reward_breakdown["total"] = clamped_total
 
-    final_score = None
+    final_score = clamped_total
     if done:
         graded = grade_submission(env.state())
         final_score = clamp_task_score(graded.total)
