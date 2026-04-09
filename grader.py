@@ -411,7 +411,8 @@ def grade_submission(state: AuditState) -> RewardInfo:
     # ── TOTAL ─────────────────────────────────────────────────────────────────
 
     raw_total = sum(components.values())
-    total = round(max(1e-6, min(raw_total, 1 - 1e-6)), 4)
+    # Clamp AFTER rounding — round(1e-6, 4) == 0.0 which would defeat a pre-round clamp
+    total = max(1e-4, min(round(raw_total, 4), 1 - 1e-4))
 
     return RewardInfo(total=total, components=components, events=events)
 
