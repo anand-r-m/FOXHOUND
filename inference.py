@@ -28,8 +28,8 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from agent import LLMAgent, BaselineAgent
-from models import AuditObservation
+from agent import BaselineAgent, LLMAgent
+from models import AuditObservation, TASK_SCORE_MIN, clamp_task_score
 
 # ============================================================================
 # OpenAI client — exactly as Scaler requires
@@ -38,7 +38,8 @@ from models import AuditObservation
 
 API_KEY = os.environ.get("API_KEY")
 API_BASE_URL = os.environ.get("API_BASE_URL")
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+# No hardcoded default: LiteLLM proxies often use different IDs; Scaler sets MODEL_NAME.
+MODEL_NAME = os.environ.get("MODEL_NAME") or os.environ.get("OPENAI_MODEL")
 LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME")
 
 # Build the client exactly as Scaler's sample shows
@@ -93,6 +94,31 @@ def _make_agent():
     return BaselineAgent()
 
 
+def _is_llm_proxy_model_error(exc: BaseException) -> bool:
+    """True when LiteLLM/proxy rejects the model name or returns 400."""
+    msg = str(exc).lower()
+    return (
+        "does not exist" in msg
+        or "notfounderror" in msg
+        or "model_not_found" in msg
+        or ("litellm" in msg and "model" in msg)
+        or "invalid model" in msg
+        or "unknown model" in msg
+    )
+
+
+def _act_or_fallback(agent, obs: AuditObservation):
+    """Run agent.act; on proxy model errors, switch LLMAgent -> BaselineAgent once."""
+    try:
+        return agent, agent.act(obs)
+    except Exception as e:
+        if isinstance(agent, LLMAgent) and _is_llm_proxy_model_error(e):
+            print(f"  ⚠ LLM proxy/model error, using BaselineAgent: {e}", flush=True)
+            baseline = BaselineAgent()
+            return baseline, baseline.act(obs)
+        raise
+
+
 # ============================================================================
 # Episode runner
 # ============================================================================
@@ -112,7 +138,7 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
     try:
         while not done and step < MAX_STEPS_PER_EPISODE:
             obs = AuditObservation.model_validate(obs_dict)
-            action = agent.act(obs)
+            agent, action = _act_or_fallback(agent, obs)
 
             step_resp = http_client.post(f"{BASE_URL}/step", json=action.model_dump())
             step_resp.raise_for_status()
