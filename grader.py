@@ -25,6 +25,7 @@ Design principles
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from models import AuditState, EvidenceType, FraudType, RewardInfo, clamp_task_score
@@ -410,7 +411,8 @@ def grade_submission(state: AuditState) -> RewardInfo:
     # ── TOTAL ─────────────────────────────────────────────────────────────────
 
     raw_total = sum(components.values())
-    total = round(min(max(raw_total, 0.01), 0.99), 3)
+    _safe = raw_total if math.isfinite(raw_total) else 0.01
+    total = round(min(max(_safe, 0.01), 0.99), 3)
 
     return RewardInfo(total=total, components=components, events=events)
 

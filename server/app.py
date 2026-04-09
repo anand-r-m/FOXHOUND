@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -85,14 +86,20 @@ async def step(action: AuditAction):
         raise HTTPException(status_code=400, detail="Call POST /reset first")
     observation, reward_info, done, info = env.step(action)
 
-    clamped_total = round(min(max(reward_info.total, 0.01), 0.99), 3)
+    _rt = reward_info.total if math.isfinite(reward_info.total) else 0.01
+    clamped_total = round(min(max(_rt, 0.01), 0.99), 3)
     reward_breakdown = reward_info.model_dump()
     reward_breakdown["total"] = clamped_total
+    reward_breakdown["components"] = {
+        k: round(min(max(v if math.isfinite(v) else 0.01, 0.01), 0.99), 3)
+        for k, v in reward_breakdown.get("components", {}).items()
+    }
 
     final_score = clamped_total
     if done:
         graded = grade_submission(env.state())
-        final_score = round(min(max(graded.total, 0.01), 0.99), 3)
+        _gs = graded.total if math.isfinite(graded.total) else 0.01
+        final_score = round(min(max(_gs, 0.01), 0.99), 3)
 
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
