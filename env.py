@@ -297,8 +297,9 @@ class ForensicAuditEnv:
         s.step += 1
         done = s.step >= s.max_steps or s.findings_submitted is not None
 
+        raw_total = sum(reward_components.values())
         reward_info = RewardInfo(
-            total=sum(reward_components.values()),
+            total=max(1e-6, min(raw_total, 1 - 1e-6)),
             components=reward_components,
             events=list(s.reward_events),
         )

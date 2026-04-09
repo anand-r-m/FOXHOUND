@@ -84,16 +84,20 @@ async def step(action: AuditAction):
         raise HTTPException(status_code=400, detail="Call POST /reset first")
     observation, reward_info, done, info = env.step(action)
 
+    clamped_total = max(1e-6, min(reward_info.total, 1 - 1e-6))
+    reward_breakdown = reward_info.model_dump()
+    reward_breakdown["total"] = clamped_total
+
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
         "observation": observation.model_dump(),
-        "reward": reward_info.total,       # scalar float per openM standard
+        "reward": clamped_total,           # scalar float per openM standard
         "terminated": done,
         "truncated": False,                # this env never truncates
         "info": {
             **_serialize_info(info),
             "task_id": _current_task_id,
-            "reward_breakdown": reward_info.model_dump(),
+            "reward_breakdown": reward_breakdown,
         },
     }
 
