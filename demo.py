@@ -1,7 +1,7 @@
 """End-to-end demo: LLMAgent (default when API key is set) or BaselineAgent on the HTTP API."""
 
 from __future__ import annotations
-
+import math
 import argparse
 import os
 import sys
@@ -85,6 +85,9 @@ def run_demo(base_url: str, *, use_llm: bool, agent_label: str) -> None:
                 body = action.model_dump(mode="json")
                 r = client.post(f"{base}/step", json=body)
                 r.raise_for_status()
+
+                print("RAW STEP RESPONSE:", r.text)  # <-- ADD THIS
+
                 data = r.json()
                 obs = data["observation"]
                 # reward is now scalar float (openM standard), not dict
@@ -103,6 +106,11 @@ def run_demo(base_url: str, *, use_llm: bool, agent_label: str) -> None:
             rs.raise_for_status()
             state = AuditState.model_validate(rs.json())
             grade = grade_submission(state)
+            print("DEBUG FINAL GRADE:", grade.total, "isfinite:", math.isfinite(grade.total))
+
+            if not (math.isfinite(grade.total) and 0.0 < grade.total < 1.0):
+                print("🚨 INVALID FINAL SCORE DETECTED:", grade.total)
+
             print(
                 f"  [END] task={task_id} steps={n_steps} "
                 f"sum_step_reward={total_step_reward:.4f} final_grade={grade.total:.4f}"

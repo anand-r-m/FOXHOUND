@@ -69,12 +69,20 @@ async def health_check():
     return {"status": "ok"}
 
 
+VALID_TASKS = {"easy", "medium", "hard"}
+
 @app.post("/reset")
 async def reset(task_id: str = "easy"):
     global env, _current_task_id
+
+    if task_id not in VALID_TASKS:
+        print("🚨 UNKNOWN TASK_ID RECEIVED:", task_id)
+        task_id = "easy"
+
     config = _load_task_config(task_id)
     env = ForensicAuditEnv(config)
     _current_task_id = task_id
+
     observation = env.reset()
     return observation.model_dump()
 
@@ -97,9 +105,18 @@ async def step(action: AuditAction):
 
     final_score = clamped_total
     if done:
-        graded = grade_submission(env.state())
-        _gs = graded.total if math.isfinite(graded.total) else 0.01
-        final_score = round(min(max(_gs, 0.01), 0.99), 3)
+        try:
+            graded = grade_submission(env.state())
+
+            _gs = graded.total if math.isfinite(graded.total) else 0.01
+            final_score = round(min(max(_gs, 0.01), 0.99), 3)
+
+        except Exception as e:
+            print("🚨 GRADER CRASH")
+            print("Task ID:", _current_task_id)
+            print("State:", env.state())
+            print("Error:", e)
+            final_score = 0.5
 
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {
