@@ -3,7 +3,7 @@ from typing import Optional
 from models import (
     ActionType, EvidenceType, DocumentStatus, DocumentCategory,
     AuditAction, AuditObservation, AuditState, RewardInfo, TaskConfig,
-    Document, DocumentSummary, FraudType
+    Document, DocumentSummary, FraudType, clamp_task_score,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ class ForensicAuditEnv:
 
         raw_total = sum(reward_components.values())
         reward_info = RewardInfo(
-            total=max(1e-6, min(raw_total, 1 - 1e-6)),
+            total=clamp_task_score(raw_total),
             components=reward_components,
             events=list(s.reward_events),
         )

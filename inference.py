@@ -14,6 +14,7 @@ Environment Variables (injected by Scaler):
 
 from __future__ import annotations
 
+import math
 import os
 import sys
 import time
@@ -60,7 +61,6 @@ TASK_IDS = ["easy", "medium", "hard"]
 MAX_STEPS_PER_EPISODE = 500
 TIMEOUT = 120.0
 
-
 # ============================================================================
 # Structured Logging (Scaler format — do not change)
 # ============================================================================
@@ -70,11 +70,13 @@ def log_start(task_id: str, difficulty: str) -> None:
 
 
 def log_step(step: int, action_type: str, reward: float, done: bool) -> None:
-    print(f"[STEP] {step} {action_type} {reward:.4f} {done}", flush=True)
+    r = clamp_task_score(float(reward))
+    print(f"[STEP] {step} {action_type} {r:.4f} {done}", flush=True)
 
 
 def log_end(task_id: str, final_score: float) -> None:
-    print(f"[END] {task_id} {final_score:.4f}", flush=True)
+    s = clamp_task_score(float(final_score))
+    print(f"[END] {task_id} {s:.4f}", flush=True)
 
 
 # ============================================================================
@@ -129,8 +131,11 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
     except Exception as e:
         print(f"  ⚠ step error at step {step}: {e}", file=sys.stderr, flush=True)
 
-    # Clamp strictly within (0, 1) — validator requires exclusive bounds
-    final_score = max(0.05, min(0.95, cumulative_reward if cumulative_reward > 0 else 0.05))
+    if not math.isfinite(cumulative_reward):
+        cumulative_reward = 0.0
+    final_score = clamp_task_score(
+        cumulative_reward if cumulative_reward > 0 else TASK_SCORE_MIN
+    )
     log_end(task_id, final_score)
     return final_score
 
@@ -176,7 +181,7 @@ def main() -> None:
             except Exception as e:
                 print(f"✗ {task_id} FAILED: {e}", file=sys.stderr, flush=True)
                 # Always emit [END] even on outer failure — validator requires it for every task
-                fallback_score = 0.05
+                fallback_score = TASK_SCORE_MIN
                 log_end(task_id, fallback_score)
                 results[task_id] = fallback_score
 

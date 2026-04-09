@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from models import AuditAction, TaskConfig
+from models import AuditAction, TaskConfig, clamp_task_score
 from env import ForensicAuditEnv
 from grader import grade_submission
 
@@ -85,14 +85,14 @@ async def step(action: AuditAction):
         raise HTTPException(status_code=400, detail="Call POST /reset first")
     observation, reward_info, done, info = env.step(action)
 
-    clamped_total = max(1e-6, min(reward_info.total, 1 - 1e-6))
+    clamped_total = clamp_task_score(reward_info.total)
     reward_breakdown = reward_info.model_dump()
     reward_breakdown["total"] = clamped_total
 
     final_score = None
     if done:
         graded = grade_submission(env.state())
-        final_score = graded.total  # clamped to (1e-6, 1 - 1e-6) in grader.py
+        final_score = clamp_task_score(graded.total)
 
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
     return {

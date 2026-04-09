@@ -3,12 +3,12 @@ grader.py — FOXHOUND Final Episode Grader
 ==========================================
 Called once per episode, after the agent calls submit_findings (or the step
 budget is exhausted).  Reads the full AuditState that the agent never had
-access to and produces a deterministic RewardInfo in [0.0, 1.0].
+access to and produces a deterministic RewardInfo strictly in (0, 1).
 
 Usage (from server or demo):
     from grader import grade_submission
     reward_info = grade_submission(env.state())
-    print(reward_info.total)          # 0.0 – 1.0
+    print(reward_info.total)          # strictly between 0 and 1
     print(reward_info.components)     # per-component breakdown
     print(reward_info.events)         # human-readable audit trail
 
@@ -20,15 +20,14 @@ Design principles
   cross-reference history isn't stored in state, so we proxy it from what
   the agent PUT into its evidence chain — if they connected dots, the chain
   will span multiple categories and evidence types).
-- Total is clamped to [0.0, 1.0] — negative components are penalties, not
-  a way to go below zero.
+- Total is clamped to (0, 1) via models.clamp_task_score — never 0.0 or 1.0.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from models import AuditState, EvidenceType, FraudType, RewardInfo
+from models import AuditState, EvidenceType, FraudType, RewardInfo, clamp_task_score
 
 
 def _normalize_evidence_chain(raw: Any) -> list[str]:
@@ -123,7 +122,7 @@ def grade_submission(state: AuditState) -> RewardInfo:
     Returns
     -------
     RewardInfo
-        .total      — float in [0.0, 1.0]
+        .total      — float strictly in (0, 1)
         .components — dict matching the YAML reward spec
         .events     — human-readable explanation of scoring decisions
     """
@@ -411,8 +410,8 @@ def grade_submission(state: AuditState) -> RewardInfo:
     # ── TOTAL ─────────────────────────────────────────────────────────────────
 
     raw_total = sum(components.values())
-    # Clamp AFTER rounding — round(1e-6, 4) == 0.0 which would defeat a pre-round clamp
-    total = max(1e-4, min(round(raw_total, 4), 1 - 1e-4))
+    # Single canonical clamp — never 0.0 or 1.0 (validator strict open interval)
+    total = clamp_task_score(raw_total)
 
     return RewardInfo(total=total, components=components, events=events)
 

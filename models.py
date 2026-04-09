@@ -1,6 +1,20 @@
+import math
+
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
+
+# Scaler / OpenEnv validators require each task score strictly in (0, 1) — not 0.0, not 1.0.
+# Use a clear margin so float noise and 4dp logging never hit the boundaries.
+TASK_SCORE_MIN = 0.01
+TASK_SCORE_MAX = 0.99
+
+
+def clamp_task_score(value: float) -> float:
+    """Return a float strictly between 0 and 1 (exclusive), safe for NaN/inf."""
+    if not math.isfinite(value):
+        return TASK_SCORE_MIN
+    return max(TASK_SCORE_MIN, min(TASK_SCORE_MAX, float(value)))
 # base model for all models
 #defines common fields for all models
 
