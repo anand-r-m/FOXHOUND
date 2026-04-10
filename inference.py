@@ -5,8 +5,8 @@ Runs the LLM agent against all three tasks (easy, medium, hard) and emits
 structured logs in the exact format required by Scaler's evaluation pipeline.
 
 Environment Variables (injected by Scaler):
-    API_KEY        - Competition proxy API key (REQUIRED)
-    API_BASE_URL   - Competition proxy base URL (REQUIRED)
+    APIKEY / API_KEY          - Competition proxy API key (REQUIRED)
+    APIBASE_URL / API_BASE_URL - Competition proxy base URL (REQUIRED)
     MODEL_NAME     - Model identifier (default: gpt-4o-mini)
     ENV_URL        - FOXHOUND server URL (default: http://127.0.0.1:7860)
     LOCAL_IMAGE_NAME - Optional Docker image name
@@ -33,25 +33,25 @@ from models import AuditObservation, TASK_SCORE_MIN, clamp_task_score
 
 # ============================================================================
 # OpenAI client — exactly as Scaler requires
-# Uses os.environ["API_KEY"] and os.environ["API_BASE_URL"] (Scaler injects these)
+# Scaler injects APIKEY + APIBASE_URL; we also accept API_KEY + API_BASE_URL
 # ============================================================================
 
-API_KEY = os.environ.get("API_KEY")
-API_BASE_URL = os.environ.get("API_BASE_URL")
+API_KEY = os.environ.get("APIKEY") or os.environ.get("API_KEY")
+API_BASE_URL = os.environ.get("APIBASE_URL") or os.environ.get("API_BASE_URL")
 # No hardcoded default: LiteLLM proxies often use different IDs; Scaler sets MODEL_NAME.
 MODEL_NAME = os.environ.get("MODEL_NAME") or os.environ.get("OPENAI_MODEL")
 LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME")
 
-# Build the client exactly as Scaler's sample shows
-if API_KEY and API_BASE_URL:
-    client = OpenAI(
-        api_key=API_KEY,
-        base_url=API_BASE_URL,
-    )
-elif API_KEY:
-    client = OpenAI(api_key=API_KEY)
-else:
-    client = None
+if not API_BASE_URL:
+    raise RuntimeError("API_BASE_URL must be set")
+
+if not API_KEY:
+    raise RuntimeError("API_KEY must be set")
+
+client = OpenAI(
+    api_key=API_KEY,
+    base_url=API_BASE_URL,
+)
 
 # ============================================================================
 # Configuration

@@ -343,20 +343,18 @@ class LLMAgent:
         if client is not None:
             self._client = client
         else:
-            # Build client from env vars.
-            # Scaler injects API_KEY + API_BASE_URL — these take absolute priority.
-            key = os.environ.get("API_KEY") or os.environ.get("OPENAI_API_KEY")
-            base_url = os.environ.get("API_BASE_URL")
+            # Build client from env vars — both are required; no direct-OpenAI fallback.
+            # Scaler injects APIKEY / APIBASE_URL; check both spellings.
+            base_url = os.environ.get("APIBASE_URL") or os.environ.get("API_BASE_URL")
+            key = os.environ.get("APIKEY") or os.environ.get("API_KEY")
+
+            if not base_url:
+                raise RuntimeError("API_BASE_URL must be set")
 
             if not key:
-                raise RuntimeError(
-                    "No API key found. Set API_KEY (Scaler proxy) or OPENAI_API_KEY."
-                )
+                raise RuntimeError("API_KEY must be set")
 
-            if base_url:
-                self._client = OpenAI(api_key=key, base_url=base_url)
-            else:
-                self._client = OpenAI(api_key=key)
+            self._client = OpenAI(api_key=key, base_url=base_url)
 
         # MODEL_NAME (Scaler standard) > OPENAI_MODEL (legacy) > default
         self._model = model or os.environ.get("MODEL_NAME") or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
