@@ -75,7 +75,7 @@ def run_demo(base_url: str, *, use_llm: bool, agent_label: str) -> None:
             print(f"[START] task={task_id}")
             r = client.post(f"{base}/reset", params={"task_id": task_id})
             r.raise_for_status()
-            obs: dict = r.json()
+            obs: dict = r.json()["observation"]
             agent = LLMAgent() if use_llm else BaselineAgent()
             total_step_reward = 0.0
             n_steps = 0

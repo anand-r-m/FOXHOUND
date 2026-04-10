@@ -24,6 +24,7 @@ _TASK_FILES = {
 # Single global env (simple; validator runs one episode at a time)
 env: ForensicAuditEnv | None = None
 _current_task_id: str | None = None
+_terminal_response: dict | None = None   # cached on first done=True; returned verbatim after
 
 
 def _load_task_config(task_id: str) -> TaskConfig:
@@ -71,27 +72,33 @@ async def health_check():
 
 @app.post("/reset")
 async def reset(task_id: str = "easy"):
-    global env, _current_task_id
+    global env, _current_task_id, _terminal_response
 
     config = _load_task_config(task_id)
     env = ForensicAuditEnv(config)
     _current_task_id = task_id
+    _terminal_response = None   # clear cached terminal state for new episode
 
     observation = env.reset()
     return {
-    "observation": observation.model_dump(),
-    "info": {
-        "task_id": _current_task_id,
-        "score": 0.5
-    }
+        "observation": observation.model_dump(),
+        "info": {
+            "task_id": _current_task_id,
+            "score": 0.5
+        }
     }
 
 
 @app.post("/step")
 async def step(action: AuditAction):
-    global env, _current_task_id
+    global env, _current_task_id, _terminal_response
     if env is None:
         raise HTTPException(status_code=400, detail="Call POST /reset first")
+
+    # Guard: episode already terminated — return cached terminal response unchanged
+    if _terminal_response is not None:
+        return _terminal_response
+
     observation, reward_info, done, info = env.step(action)
 
     _rt = reward_info.total if math.isfinite(reward_info.total) else 0.01
@@ -119,10 +126,10 @@ async def step(action: AuditAction):
             final_score = 0.5
 
     # openM/Gymnasium standard: (obs, reward: float, terminated, truncated, info)
-    return {
+    response = {
         "observation": observation.model_dump(),
-        "reward": clamped_total,           # scalar float per openM standard
-        "terminated": done,
+        "reward": float(clamped_total),           # scalar float per openM standard
+        "terminated": bool(done),
         "truncated": False,                # this env never truncates
         "info": {
             **_serialize_info(info),
@@ -131,6 +138,12 @@ async def step(action: AuditAction):
             "score": final_score,
         },
     }
+
+    # Cache on first termination so repeated /step calls return the same frozen response
+    if done:
+        _terminal_response = response
+
+    return response
 
 
 @app.get("/state")
