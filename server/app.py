@@ -78,10 +78,13 @@ async def reset(task_id: str = "easy"):
     _current_task_id = task_id
 
     observation = env.reset()
-    payload = observation.model_dump()
-    # Keep flat reset payload for existing clients, plus validator-friendly score metadata.
-    payload["info"] = {"task_id": task_id, "score": 0.5}
-    return payload
+    return {
+    "observation": observation.model_dump(),
+    "info": {
+        "task_id": _current_task_id,
+        "score": 0.5
+    }
+    }
 
 
 @app.post("/step")
