@@ -128,7 +128,7 @@ def run_task(http_client: httpx.Client, task_id: str) -> float:
 
     response = http_client.post(f"{BASE_URL}/reset", params={"task_id": task_id})
     response.raise_for_status()
-    obs_dict = response.json()
+    obs_dict = response.json()["observation"]
 
     agent = _make_agent()
     cumulative_reward = 0.0
