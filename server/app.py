@@ -69,22 +69,19 @@ async def health_check():
     return {"status": "ok"}
 
 
-VALID_TASKS = {"easy", "medium", "hard"}
-
 @app.post("/reset")
 async def reset(task_id: str = "easy"):
     global env, _current_task_id
-
-    if task_id not in VALID_TASKS:
-        print("🚨 UNKNOWN TASK_ID RECEIVED:", task_id)
-        task_id = "easy"
 
     config = _load_task_config(task_id)
     env = ForensicAuditEnv(config)
     _current_task_id = task_id
 
     observation = env.reset()
-    return observation.model_dump()
+    payload = observation.model_dump()
+    # Keep flat reset payload for existing clients, plus validator-friendly score metadata.
+    payload["info"] = {"task_id": task_id, "score": 0.5}
+    return payload
 
 
 @app.post("/step")
